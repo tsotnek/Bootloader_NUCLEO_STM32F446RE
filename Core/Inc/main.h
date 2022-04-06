@@ -67,6 +67,9 @@ void Error_Handler(void);
 void bootloader_uart_read_data(void);
 void bootloader_jump_to_user_app(void);
 
+
+uint16_t get_mcu_chip_id(void);
+
 void bootloader_handle_getver_cmd(uint8_t *bl_rx_buffer);
 void bootloader_handle_gethelp_cmd(uint8_t *pBuffer);
 void bootloader_handle_getcid_cmd(uint8_t *pBuffer);
