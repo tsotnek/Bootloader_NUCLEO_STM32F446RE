@@ -514,6 +514,31 @@ void bootloader_handle_getcid_cmd(uint8_t *pBuffer)
 
 void bootloader_handle_getrdp_cmd(uint8_t *pBuffer)
 {
+	uint8_t rdp_level = 0;
+	// 1) verify the checksum
+    printmsg("BL_DEBUG_MSG:bootloader_handle_getrdp_cmd\n");
+
+	 //Total length of the command packet
+	  uint32_t command_packet_len = (uint8_t)pBuffer[0]+1 ;
+
+	  //extract the CRC32 sent by the Host
+	  uint32_t host_crc = *((uint32_t * ) (pBuffer+command_packet_len - 4) ) ;
+		
+	if (! bootloader_verify_crc(&pBuffer[0],command_packet_len-4,host_crc))
+    {
+        printmsg("BL_DEBUG_MSG:checksum success !!\n");
+        // checksum is correct..
+        bootloader_send_ack(pBuffer[0],2);
+				rdp_level = get_flash_rdp_level();
+				printmsg("BL_DEBUG_MSG: RDP is: %d %#x !!\n", rdp_level, rdp_level);
+        bootloader_uart_write_data(&rdp_level,1);
+
+    }else
+    {
+        printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+        //checksum is wrong send nack
+        bootloader_send_nack();
+    }
 	
 }
 
@@ -575,6 +600,23 @@ uint8_t get_bootloader_version(void){
 	return (uint8_t)BL_VERSION;
 }
 
+uint8_t get_flash_rdp_level(void)
+{
+	uint8_t rdp_status=0;
+	#if 0
+	FLASH_OBProgramInitTypeDef ob_handle;
+	HAL_FLASHEx_OBGetConfig(&ob_handle);
+	rdp_status = (uint8_t) ob_handle.RDPLevel;
+	#else
+	
+	volatile uint32_t *pOB_addr = (uint32_t*) 0x1FFFC000;
+	rdp_status=(uint8_t)(*pOB_addr>>8);
+	#endif
+	
+	
+	return rdp_status;
+
+}
 /* prints formatted string to console over UART */
  void printmsg(char *format,...)
  {
