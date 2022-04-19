@@ -30,11 +30,13 @@ Build target 'Bootloader_NUCLEO_STM32F446RE'
 compiling main.c...
 ../Core/Src/main.c(367): warning:  #513-D: a value of type "void *" cannot be assigned to an entity of type "void (*)(void)"
   	app_reset_handler = (void *) resethandler_address;
-../Core/Src/main.c: 1 warning, 0 errors
+../Core/Src/main.c(585): warning:  #144-D: a value of type "void *" cannot be used to initialize an entity of type "void (*)(void)"
+              void (*lets_jump)(void) = (void *)go_address;
+../Core/Src/main.c: 2 warnings, 0 errors
 linking...
-Program Size: Code=12450 RO-data=1062 RW-data=32 ZI-data=1968  
+Program Size: Code=13838 RO-data=1062 RW-data=32 ZI-data=2000  
 FromELF: creating hex file...
-"Bootloader_NUCLEO_STM32F446RE\Bootloader_NUCLEO_STM32F446RE.axf" - 0 Error(s), 1 Warning(s).
+"Bootloader_NUCLEO_STM32F446RE\Bootloader_NUCLEO_STM32F446RE.axf" - 0 Error(s), 2 Warning(s).
 
 <h2>Software Packages used:</h2>
 

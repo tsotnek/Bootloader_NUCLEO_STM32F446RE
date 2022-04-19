@@ -86,10 +86,12 @@ void bootloader_handle_dis_rw_protect(uint8_t *pBuffer);
 void bootloader_uart_write_data(uint8_t *pBuffer, uint32_t len);
 void bootloader_send_nack(void);
 void bootloader_send_ack(uint8_t command_code, uint8_t follow_len);
+uint8_t execute_flash_erase(uint8_t sector_number, uint8_t number_of_sector);
 
 uint8_t bootloader_verify_crc (uint8_t *pData, uint32_t len, uint32_t crc_host);
 uint8_t get_bootloader_version(void);
 uint8_t get_flash_rdp_level(void);
+uint8_t verify_address(uint32_t go_address);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
@@ -123,6 +125,20 @@ uint8_t get_flash_rdp_level(void);
 #define	BL_OTP_READ							0x5B
 #define	BL_DIS_R_W_PROTECT			0x5C
 
+#define ADDR_VALID 0x00
+#define ADDR_INVALID 0x01
+
+#define INVALID_SECTOR 0x04
+
+/*Some Start and End addresses of different memories of STM32F446xx MCU */
+/*Change this according to your MCU */
+#define SRAM1_SIZE            112*1024     // STM32F446RE has 112KB of SRAM1
+#define SRAM1_END             (SRAM1_BASE + SRAM1_SIZE)
+#define SRAM2_SIZE            16*1024     // STM32F446RE has 16KB of SRAM2
+#define SRAM2_END             (SRAM2_BASE + SRAM2_SIZE)
+#define FLASH_SIZE             512*1024     // STM32F446RE has 512KB of SRAM2
+#define BKPSRAM_SIZE           4*1024     // STM32F446RE has 4KB of SRAM2
+#define BKPSRAM_END            (BKPSRAM_BASE + BKPSRAM_SIZE)
 
 /* ACK AND NACK bytes*/
 #define BL_ACK 		0xA5

@@ -514,7 +514,7 @@ void bootloader_handle_getcid_cmd(uint8_t *pBuffer)
 
 void bootloader_handle_getrdp_cmd(uint8_t *pBuffer)
 {
-	uint8_t rdp_level = 0;
+		uint8_t rdp_level = 0;
 	// 1) verify the checksum
     printmsg("BL_DEBUG_MSG:bootloader_handle_getrdp_cmd\n");
 
@@ -545,13 +545,100 @@ void bootloader_handle_getrdp_cmd(uint8_t *pBuffer)
 
 void bootloader_handle_go_cmd(uint8_t *pBuffer)
 {
-	
+	uint32_t go_address=0;
+	uint8_t addr_valid = ADDR_VALID;
+	uint8_t addr_invalid = ADDR_INVALID;
+
+  printmsg("BL_DEBUG_MSG:bootloader_handle_go_cmd\n");
+
+   //Total length of the command packet
+	uint32_t command_packet_len = pBuffer[0]+1 ;
+
+	//extract the CRC32 sent by the Host
+	uint32_t host_crc = *((uint32_t * ) (pBuffer+command_packet_len - 4) ) ;
+
+	if (! bootloader_verify_crc(&pBuffer[0],command_packet_len-4,host_crc))
+	{
+        printmsg("BL_DEBUG_MSG:checksum success !!\n");
+
+        bootloader_send_ack(pBuffer[0],1);
+
+        //extract the go address
+        go_address = *((uint32_t *)&pBuffer[2] );
+        printmsg("BL_DEBUG_MSG:GO addr: %#x\n",go_address);
+
+        if( verify_address(go_address) == ADDR_VALID )
+        {
+            //tell host that address is fine
+            bootloader_uart_write_data(&addr_valid,1);
+
+            /*jump to "go" address.
+            we dont care what is being done there.
+            host must ensure that valid code is present over there
+            Its not the duty of bootloader. so just trust and jump */
+
+            /* Not doing the below line will result in hardfault exception for ARM cortex M */
+            //watch : https://www.youtube.com/watch?v=VX_12SjnNhY
+
+            go_address+=1; //make T bit =1
+
+            void (*lets_jump)(void) = (void *)go_address;
+
+            printmsg("BL_DEBUG_MSG: jumping to go address! \n");
+
+            lets_jump();
+
+		}else
+		{
+            printmsg("BL_DEBUG_MSG:GO addr invalid ! \n");
+            //tell host that address is invalid
+            bootloader_uart_write_data(&addr_invalid,1);
+		}
+
+	}else
+	{
+        printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+        bootloader_send_nack();
+	}
+
+
 }
+	
+
 
 
 void bootloader_handle_flash_erase_cmd(uint8_t *pBuffer)
 {
 	
+	uint8_t erase_status = 0x00;
+	// 1) verify the checksum
+    printmsg("BL_DEBUG_MSG:bootloader_handle_flash_erase_cmd\n");
+
+	 //Total length of the command packet
+	  uint32_t command_packet_len = (uint8_t)pBuffer[0]+1 ;
+
+	  //extract the CRC32 sent by the Host
+	  uint32_t host_crc = *((uint32_t * ) (pBuffer+command_packet_len - 4) ) ;
+	
+		if (! bootloader_verify_crc(&pBuffer[0],command_packet_len-4,host_crc))
+    {
+        printmsg("BL_DEBUG_MSG:checksum success !!\n");
+        // checksum is correct..
+        bootloader_send_ack(pBuffer[0],2);
+			
+				HAL_GPIO_WritePin(LD2_GPIO_Port,LD2_Pin,GPIO_PIN_SET);
+				erase_status = execute_flash_erase(pBuffer[2], pBuffer[3]);
+				HAL_GPIO_WritePin(LD2_GPIO_Port,LD2_Pin,GPIO_PIN_RESET);
+
+				printmsg("BL_DEBUG_MSG:flash erase status %#x\n", erase_status);
+				bootloader_uart_write_data(&erase_status,1);
+
+    }else
+    {
+        printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+        //checksum is wrong send nack
+        bootloader_send_nack();
+    }
 }
 
 
@@ -590,6 +677,49 @@ void bootloader_handle_dis_rw_protect(uint8_t *pBuffer)
 	
 }
 
+uint8_t execute_flash_erase(uint8_t sector_number, uint8_t number_of_sector)
+{
+	//we have total 8sectors on stm32f446re [0 to 7]
+	//number_of_sector has to be in range 0 to 7
+	//if sector_number = 0xff, -> mass erase
+	FLASH_EraseInitTypeDef flashErase_handle;
+	uint32_t sectorError;
+	HAL_StatusTypeDef status;
+	
+	if(number_of_sector>8)
+		return INVALID_SECTOR;
+	
+	if((sector_number == 0xFF) || (sector_number <=7))
+	{
+		if(sector_number == (uint8_t) 0xFF)
+		{
+			flashErase_handle.TypeErase = FLASH_TYPEERASE_MASSERASE;
+		}
+		else
+		{
+			//here just calculate how many sectors to erase
+			uint8_t remaining_sector = 8 - sector_number;
+			if(number_of_sector > remaining_sector)
+			{
+					number_of_sector = remaining_sector;
+			}
+			flashErase_handle.TypeErase = FLASH_TYPEERASE_SECTORS;
+			flashErase_handle.Sector = sector_number; //this is initial sector
+			flashErase_handle.NbSectors = number_of_sector;			
+		}
+		flashErase_handle.Banks = FLASH_BANK_1;
+		
+		//get access to touch the flash registers
+		HAL_FLASH_Unlock();
+		flashErase_handle.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+		status = HAL_FLASHEx_Erase(&flashErase_handle, &sectorError);
+		HAL_FLASH_Lock();
+		
+		return status;		
+	}
+	
+	return INVALID_SECTOR;
+}
 
 void bootloader_uart_write_data(uint8_t *pBuffer, uint32_t len)
 {
@@ -616,6 +746,37 @@ uint8_t get_flash_rdp_level(void)
 	
 	return rdp_status;
 
+}
+
+//verify the address sent by the host .
+uint8_t verify_address(uint32_t go_address)
+{
+	//so, what are the valid addresses to which we can jump ?
+	//can we jump to system memory ? yes
+	//can we jump to sram1 memory ?  yes
+	//can we jump to sram2 memory ? yes
+	//can we jump to backup sram memory ? yes
+	//can we jump to peripheral memory ? its possible , but dont allow. so no
+	//can we jump to external memory ? yes.
+
+	if ( go_address >= SRAM1_BASE && go_address < SRAM1_END)
+	{
+		return ADDR_VALID;
+	}
+	else if ( go_address >= SRAM2_BASE && go_address < SRAM2_END)
+	{
+		return ADDR_VALID;
+	}
+	else if ( go_address >= FLASH_BASE && go_address < FLASH_END)
+	{
+		return ADDR_VALID;
+	}
+	else if ( go_address >= BKPSRAM_BASE && go_address < BKPSRAM_END)
+	{
+		return ADDR_VALID;
+	}
+	else
+		return ADDR_INVALID;
 }
 /* prints formatted string to console over UART */
  void printmsg(char *format,...)
