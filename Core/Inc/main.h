@@ -86,7 +86,11 @@ void bootloader_handle_dis_rw_protect(uint8_t *pBuffer);
 void bootloader_uart_write_data(uint8_t *pBuffer, uint32_t len);
 void bootloader_send_nack(void);
 void bootloader_send_ack(uint8_t command_code, uint8_t follow_len);
+
+uint8_t execute_mem_write(uint8_t *pBuffer, uint32_t mem_address, uint32_t len);
 uint8_t execute_flash_erase(uint8_t sector_number, uint8_t number_of_sector);
+uint8_t configure_flash_sector_rw_protection(uint8_t sector_details, uint8_t protection_mode, uint8_t disable);
+uint16_t read_status_sectors_protection(void);
 
 uint8_t bootloader_verify_crc (uint8_t *pData, uint32_t len, uint32_t crc_host);
 uint8_t get_bootloader_version(void);
